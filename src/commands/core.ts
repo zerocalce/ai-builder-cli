@@ -1,0 +1,633 @@
+import { CLICommand, CommandArgs, Project, Template, Logger } from '../types';
+import { CLIInterface } from '../cli/interface';
+import { ProjectManagerImpl } from '../core/project-manager';
+
+export class InitCommand implements CLICommand {
+  name = 'init';
+  description = 'Initialize a new AI project from a template';
+  
+  constructor(
+    private cli: CLIInterface,
+    private projectManager: ProjectManagerImpl,
+    private logger: Logger
+  ) {}
+
+  options = [
+    {
+      name: 'template',
+      alias: 't',
+      description: 'Template to use for the project',
+      type: 'string' as const,
+      required: true
+    },
+    {
+      name: 'name',
+      alias: 'n',
+      description: 'Project name',
+      type: 'string' as const,
+      required: true
+    },
+    {
+      name: 'path',
+      alias: 'p',
+      description: 'Directory to create the project in',
+      type: 'string' as const,
+      default: '.'
+    }
+  ];
+
+  async handler(args: CommandArgs): Promise<void> {
+    this.cli.title('🚀 AI Builder - Project Initialization');
+    this.cli.newline();
+
+    try {
+      // Validate template
+      const templates = await this.getAvailableTemplates();
+      const template = templates.find(t => t.name === args.template);
+      
+      if (!template) {
+        this.cli.error(`Template '${args.template}' not found`);
+        this.cli.info('Available templates:');
+        templates.forEach(t => this.cli.list([`  • ${t.name}: ${t.description}`]));
+        return;
+      }
+
+      // Create project
+      const progress = this.cli.createProgressIndicator();
+      progress.start(`Creating project '${args.name}'...`);
+
+      const project = await this.projectManager.createProject(
+        args.template,
+        args.name,
+        args.path
+      );
+
+      progress.success(`Project '${args.name}' created successfully!`);
+      this.cli.newline();
+
+      // Display project information
+      this.cli.subtitle('📁 Project Details:');
+      this.cli.table([{
+        'Name': project.name,
+        'Template': project.template,
+        'Version': project.version,
+        'Path': project.path,
+        'Created': project.createdAt.toLocaleString()
+      }]);
+
+      this.cli.newline();
+      this.cli.subtitle('🎯 Next Steps:');
+      this.cli.list([
+        `cd ${project.name}`,
+        'ai-builder build',
+        'ai-builder deploy <target>'
+      ]);
+
+      this.cli.newline();
+      this.cli.info(`Project configuration saved to: ${path.join(project.path, '.ai-builder/project.json')}`);
+
+    } catch (error) {
+      this.cli.error(`Failed to create project: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+
+  private async getAvailableTemplates(): Promise<Template[]> {
+    // This would load from templates directory
+    // For now, return mock templates
+    return [
+      {
+        name: 'express-api',
+        version: '1.0.0',
+        description: 'Express.js API with TypeScript',
+        category: 'backend',
+        tags: ['api', 'express', 'typescript'],
+        config: {
+          build: {
+            command: 'npm run build',
+            outputDir: 'dist',
+            environment: {},
+            dependencies: ['express', 'typescript'],
+            scripts: {}
+          },
+          deploy: {
+            targets: [],
+            healthCheck: {
+              endpoint: '/health',
+              interval: 30000,
+              timeout: 5000,
+              retries: 3
+            }
+          }
+        },
+        files: []
+      },
+      {
+        name: 'react-app',
+        version: '1.0.0',
+        description: 'React application with Vite',
+        category: 'frontend',
+        tags: ['react', 'vite', 'typescript'],
+        config: {
+          build: {
+            command: 'npm run build',
+            outputDir: 'dist',
+            environment: {},
+            dependencies: ['react', 'vite'],
+            scripts: {}
+          },
+          deploy: {
+            targets: [],
+            healthCheck: {
+              endpoint: '/',
+              interval: 30000,
+              timeout: 5000,
+              retries: 3
+            }
+          }
+        },
+        files: []
+      },
+      {
+        name: 'fullstack-ai',
+        version: '1.0.0',
+        description: 'Full-stack AI application with database',
+        category: 'fullstack',
+        tags: ['ai', 'database', 'fullstack'],
+        config: {
+          build: {
+            command: 'npm run build',
+            outputDir: 'dist',
+            environment: {},
+            dependencies: ['express', 'react', 'prisma'],
+            scripts: {}
+          },
+          deploy: {
+            targets: [],
+            healthCheck: {
+              endpoint: '/health',
+              interval: 30000,
+              timeout: 5000,
+              retries: 3
+            }
+          }
+        },
+        files: []
+      }
+    ];
+  }
+}
+
+export class BuildCommand implements CLICommand {
+  name = 'build';
+  description = 'Build the current project';
+  
+  constructor(
+    private cli: CLIInterface,
+    private projectManager: ProjectManagerImpl,
+    private logger: Logger
+  ) {}
+
+  options = [
+    {
+      name: 'path',
+      alias: 'p',
+      description: 'Path to the project directory',
+      type: 'string' as const,
+      default: '.'
+    },
+    {
+      name: 'watch',
+      alias: 'w',
+      description: 'Watch for changes and rebuild automatically',
+      type: 'boolean' as const,
+      default: false
+    },
+    {
+      name: 'verbose',
+      alias: 'v',
+      description: 'Show detailed build output',
+      type: 'boolean' as const,
+      default: false
+    }
+  ];
+
+  async handler(args: CommandArgs): Promise<void> {
+    this.cli.title('🔨 AI Builder - Project Build');
+    this.cli.newline();
+
+    try {
+      // Load project
+      const project = await this.projectManager.loadProject(args.path);
+      
+      this.cli.info(`Building project: ${project.name}`);
+      this.cli.info(`Template: ${project.template}`);
+      this.cli.info(`Build command: ${project.config.build.command}`);
+      this.cli.newline();
+
+      // Validate project
+      const validation = await this.projectManager.validateProject(project);
+      if (!validation.valid) {
+        this.cli.error('Project validation failed:');
+        validation.errors.forEach(error => {
+          this.cli.list([`  ✗ ${error.message}`]);
+        });
+        return;
+      }
+
+      if (validation.warnings.length > 0) {
+        this.cli.warning('Build warnings:');
+        validation.warnings.forEach(warning => {
+          this.cli.list([`  ⚠ ${warning.message}`]);
+        });
+        this.cli.newline();
+      }
+
+      // Build project
+      const progress = this.cli.createProgressIndicator();
+      progress.start('Building project...');
+
+      const buildResult = await this.projectManager.buildProject(project);
+
+      if (buildResult.success) {
+        progress.success('Build completed successfully!');
+        this.cli.newline();
+
+        this.cli.subtitle('📊 Build Results:');
+        this.cli.table([{
+          'Status': '✅ Success',
+          'Duration': `${buildResult.duration}ms`,
+          'Artifacts': buildResult.artifacts.length,
+          'Output Size': this.formatFileSize(buildResult.artifacts.reduce((total, artifact) => total + artifact.size, 0))
+        }]);
+
+        if (args.verbose && buildResult.output) {
+          this.cli.newline();
+          this.cli.subtitle('📝 Build Output:');
+          console.log(buildResult.output);
+        }
+
+        if (buildResult.artifacts.length > 0) {
+          this.cli.newline();
+          this.cli.subtitle('📦 Build Artifacts:');
+          buildResult.artifacts.forEach(artifact => {
+            this.cli.list([`  • ${artifact.path} (${this.formatFileSize(artifact.size)})`]);
+          });
+        }
+
+      } else {
+        progress.error('Build failed!');
+        this.cli.newline();
+
+        this.cli.subtitle('❌ Build Errors:');
+        this.cli.error(buildResult.error || 'Unknown error occurred');
+
+        if (args.verbose && buildResult.output) {
+          this.cli.newline();
+          this.cli.subtitle('📝 Build Output:');
+          console.log(buildResult.output);
+        }
+
+        process.exit(1);
+      }
+
+    } catch (error) {
+      this.cli.error(`Build failed: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+
+  private formatFileSize(bytes: number): string {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+
+    return `${size.toFixed(1)} ${units[unitIndex]}`;
+  }
+}
+
+export class DeployCommand implements CLICommand {
+  name = 'deploy';
+  description = 'Deploy the project to a target environment';
+  
+  constructor(
+    private cli: CLIInterface,
+    private projectManager: ProjectManagerImpl,
+    private logger: Logger
+  ) {}
+
+  options = [
+    {
+      name: 'target',
+      alias: 't',
+      description: 'Deployment target',
+      type: 'string' as const,
+      required: true
+    },
+    {
+      name: 'path',
+      alias: 'p',
+      description: 'Path to the project directory',
+      type: 'string' as const,
+      default: '.'
+    },
+    {
+      name: 'force',
+      alias: 'f',
+      description: 'Force deployment without confirmation',
+      type: 'boolean' as const,
+      default: false
+    },
+    {
+      name: 'dry-run',
+      description: 'Show what would be deployed without actually deploying',
+      type: 'boolean' as const,
+      default: false
+    }
+  ];
+
+  async handler(args: CommandArgs): Promise<void> {
+    this.cli.title('🚀 AI Builder - Project Deployment');
+    this.cli.newline();
+
+    try {
+      // Load project
+      const project = await this.projectManager.loadProject(args.path);
+      
+      this.cli.info(`Deploying project: ${project.name}`);
+      this.cli.info(`Target: ${args.target}`);
+      this.cli.newline();
+
+      // Find deployment target
+      const target = project.config.deploy?.targets?.find(t => t.name === args.target);
+      if (!target) {
+        this.cli.error(`Deployment target '${args.target}' not found`);
+        this.cli.info('Available targets:');
+        project.config.deploy?.targets?.forEach(t => {
+          this.cli.list([`  • ${t.name} (${t.type})`]);
+        });
+        return;
+      }
+
+      // Show deployment plan
+      this.cli.subtitle('📋 Deployment Plan:');
+      this.cli.table([{
+        'Project': project.name,
+        'Target': target.name,
+        'Type': target.type,
+        'Environment': target.environment,
+        'Version': project.version
+      }]);
+
+      this.cli.newline();
+
+      // Confirmation
+      if (!args.force && !args.dryRun) {
+        const confirmed = await this.cli.confirm(
+          `Are you sure you want to deploy '${project.name}' to '${args.target}' (${target.environment})?`
+        );
+        
+        if (!confirmed) {
+          this.cli.info('Deployment cancelled');
+          return;
+        }
+      }
+
+      if (args.dryRun) {
+        this.cli.info('🔍 Dry run mode - no actual deployment will be performed');
+        this.cli.newline();
+        this.cli.subtitle('📋 Deployment Summary:');
+        this.cli.list([
+          `• Project: ${project.name}`,
+          `• Target: ${target.name} (${target.type})`,
+          `• Environment: ${target.environment}`,
+          `• Version: ${project.version}`,
+          `• Build command: ${project.config.build.command}`,
+          `• Output directory: ${project.config.build.outputDir}`
+        ]);
+        return;
+      }
+
+      // Build project first
+      this.cli.info('🔨 Building project before deployment...');
+      const buildResult = await this.projectManager.buildProject(project);
+      
+      if (!buildResult.success) {
+        this.cli.error('Build failed - deployment aborted');
+        return;
+      }
+
+      this.cli.success('Build completed successfully');
+
+      // Deploy (placeholder for actual deployment logic)
+      const progress = this.cli.createProgressIndicator();
+      progress.start(`Deploying to ${target.name}...`);
+
+      // TODO: Implement actual deployment logic
+      await this.simulateDeployment(target, project);
+
+      progress.success(`Deployment to '${target.name}' completed successfully!`);
+      this.cli.newline();
+
+      this.cli.subtitle('🎉 Deployment Results:');
+      this.cli.table([{
+        'Status': '✅ Success',
+        'Target': target.name,
+        'Environment': target.environment,
+        'Version': project.version,
+        'Deployed At': new Date().toLocaleString()
+      }]);
+
+      this.cli.newline();
+      this.cli.info('📊 Next steps:');
+      this.cli.list([
+        'ai-builder status',
+        'ai-builder logs',
+        'ai-builder rollback <version>'
+      ]);
+
+    } catch (error) {
+      this.cli.error(`Deployment failed: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+
+  private async simulateDeployment(target: any, project: Project): Promise<void> {
+    // Simulate deployment delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // This would be replaced with actual deployment logic
+    this.logger.info(`Simulating deployment to ${target.name} (${target.type})`);
+  }
+}
+
+export class StatusCommand implements CLICommand {
+  name = 'status';
+  description = 'Show the status of projects and deployments';
+  
+  constructor(
+    private cli: CLIInterface,
+    private projectManager: ProjectManagerImpl,
+    private logger: Logger
+  ) {}
+
+  options = [
+    {
+      name: 'project',
+      alias: 'p',
+      description: 'Show status for specific project',
+      type: 'string' as const
+    },
+    {
+      name: 'deployments',
+      alias: 'd',
+      description: 'Show deployment history',
+      type: 'boolean' as const,
+      default: false
+    }
+  ];
+
+  async handler(args: CommandArgs): Promise<void> {
+    this.cli.title('📊 AI Builder - Status Overview');
+    this.cli.newline();
+
+    try {
+      if (args.project) {
+        // Show status for specific project
+        const project = await this.projectManager.loadProject(args.project);
+        await this.showProjectStatus(project, args.deployments);
+      } else {
+        // Show status for all projects
+        const projects = await this.projectManager.listProjects();
+        await this.showAllProjectsStatus(projects, args.deployments);
+      }
+
+    } catch (error) {
+      this.cli.error(`Failed to get status: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+
+  private async showProjectStatus(project: Project, showDeployments: boolean): Promise<void> {
+    this.cli.subtitle(`📁 Project: ${project.name}`);
+    this.cli.table([{
+      'Name': project.name,
+      'Template': project.template,
+      'Version': project.version,
+      'Path': project.path,
+      'Created': project.createdAt.toLocaleString(),
+      'Updated': project.updatedAt.toLocaleString()
+    }]);
+
+    // Show validation status
+    const validation = await this.projectManager.validateProject(project);
+    this.cli.newline();
+    this.cli.subtitle('✅ Validation Status:');
+    this.cli.info(`Status: ${validation.valid ? '✅ Valid' : '❌ Invalid'}`);
+    
+    if (validation.errors.length > 0) {
+      this.cli.error('Errors:');
+      validation.errors.forEach(error => {
+        this.cli.list([`  ✗ ${error.message}`]);
+      });
+    }
+
+    if (validation.warnings.length > 0) {
+      this.cli.warning('Warnings:');
+      validation.warnings.forEach(warning => {
+        this.cli.list([`  ⚠ ${warning.message}`]);
+      });
+    }
+
+    // Show deployment targets
+    this.cli.newline();
+    this.cli.subtitle('🎯 Deployment Targets:');
+    if (project.config.deploy?.targets && project.config.deploy.targets.length > 0) {
+      project.config.deploy.targets.forEach(target => {
+        this.cli.list([`  • ${target.name} (${target.type} - ${target.environment})`]);
+      });
+    } else {
+      this.cli.info('No deployment targets configured');
+    }
+
+    // Show deployment history
+    if (showDeployments && project.deployments.length > 0) {
+      this.cli.newline();
+      this.cli.subtitle('📜 Deployment History:');
+      const deploymentData = project.deployments.map(deployment => ({
+        'ID': deployment.id.substring(0, 8),
+        'Target': deployment.target.name,
+        'Version': deployment.version,
+        'Status': this.formatDeploymentStatus(deployment.status),
+        'Created': deployment.createdAt.toLocaleString(),
+        'Duration': deployment.completedAt 
+          ? `${deployment.completedAt.getTime() - deployment.createdAt.getTime()}ms`
+          : 'In progress'
+      }));
+      this.cli.table(deploymentData);
+    }
+  }
+
+  private async showAllProjectsStatus(projects: Project[], showDeployments: boolean): Promise<void> {
+    if (projects.length === 0) {
+      this.cli.info('No projects found');
+      return;
+    }
+
+    this.cli.subtitle(`📁 All Projects (${projects.length})`);
+    
+    const projectData = await Promise.all(projects.map(async project => {
+      const validation = await this.projectManager.validateProject(project);
+      return {
+        'Name': project.name,
+        'Template': project.template,
+        'Version': project.version,
+        'Status': validation.valid ? '✅ Valid' : '❌ Invalid',
+        'Deployments': project.deployments.length,
+        'Updated': project.updatedAt.toLocaleDateString()
+      };
+    }));
+
+    this.cli.table(projectData);
+
+    if (showDeployments) {
+      this.cli.newline();
+      this.cli.subtitle('📜 Recent Deployments:');
+      
+      const allDeployments = projects
+        .flatMap(p => p.deployments)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, 10);
+
+      if (allDeployments.length > 0) {
+        const deploymentData = allDeployments.map(deployment => ({
+          'Project': deployment.projectId.substring(0, 8),
+          'Target': deployment.target.name,
+          'Status': this.formatDeploymentStatus(deployment.status),
+          'Created': deployment.createdAt.toLocaleString()
+        }));
+        this.cli.table(deploymentData);
+      } else {
+        this.cli.info('No deployments found');
+      }
+    }
+  }
+
+  private formatDeploymentStatus(status: string): string {
+    const statusMap: Record<string, string> = {
+      'pending': '⏳ Pending',
+      'building': '🔨 Building',
+      'deploying': '🚀 Deploying',
+      'success': '✅ Success',
+      'failed': '❌ Failed',
+      'rolling_back': '🔄 Rolling Back',
+      'rolled_back': '↩️ Rolled Back'
+    };
+    return statusMap[status] || status;
+  }
+}
