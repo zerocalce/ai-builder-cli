@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import Handlebars from 'handlebars';
-import { Project, ProjectManager, BuildResult, ValidationResult, Template, Logger } from '../types';
+import { Project, ProjectManager, BuildResult, ValidationResult, Template, Logger, ValidationError, ValidationWarning } from '../types';
 
 export class ProjectManagerImpl implements ProjectManager {
   private projectsDir: string;
@@ -13,7 +13,8 @@ export class ProjectManagerImpl implements ProjectManager {
   constructor(logger: Logger, dataDir?: string) {
     this.logger = logger;
     this.projectsDir = path.join(dataDir || path.join(os.homedir(), '.ai-builder'), 'projects');
-    this.templatesDir = path.join(__dirname, '../../templates');
+    // If a dataDir is provided (e.g. during tests), load templates from there
+    this.templatesDir = dataDir ? path.join(dataDir, 'templates') : path.join(__dirname, '../../templates');
     
     this.ensureDirectories();
   }
@@ -34,7 +35,7 @@ export class ProjectManagerImpl implements ProjectManager {
     // Check if project already exists
     const targetPath = path.resolve(projectPath, name);
     if (await fs.pathExists(targetPath)) {
-      throw new Error(`Directory '${targetPath}' already exists`);
+      throw new Error(`Directory already exists: '${targetPath}'`);
     }
 
     // Load template
@@ -48,7 +49,11 @@ export class ProjectManagerImpl implements ProjectManager {
       name,
       template: templateName,
       version: '1.0.0',
-      config: template.config,
+      config: {
+        build: template.config.build,
+        deploy: template.config.deploy,
+        environment: { variables: {}, secrets: {} }
+      } as any,
       deployments: [],
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -88,7 +93,7 @@ export class ProjectManagerImpl implements ProjectManager {
     const filesPath = path.join(templatePath, 'files');
     
     // Load template files
-    const files = [];
+    const files: any[] = [];
     if (await fs.pathExists(filesPath)) {
       await this.collectTemplateFiles(filesPath, '', files);
     }
@@ -171,7 +176,7 @@ export class ProjectManagerImpl implements ProjectManager {
 
   private async createProjectFiles(template: Template, targetPath: string, variables: Record<string, any>): Promise<void> {
     for (const file of template.files) {
-      const filePath = path.join(targetPath, file.path);
+      let filePath = path.join(targetPath, file.path);
       const dirPath = path.dirname(filePath);
       
       await fs.ensureDir(dirPath);
@@ -182,7 +187,7 @@ export class ProjectManagerImpl implements ProjectManager {
       if (file.template) {
         const compiledTemplate = Handlebars.compile(content);
         content = compiledTemplate(variables);
-        
+
         // Remove .hbs or .handlebars extension
         if (file.path.endsWith('.hbs')) {
           filePath = filePath.slice(0, -4);
@@ -207,9 +212,10 @@ export class ProjectManagerImpl implements ProjectManager {
     const startTime = Date.now();
     const buildConfig = project.config.build;
     
+    let originalCwd = process.cwd();
     try {
       // Change to project directory
-      const originalCwd = process.cwd();
+      originalCwd = process.cwd();
       process.chdir(project.path);
 
       // Install dependencies
@@ -248,14 +254,14 @@ export class ProjectManagerImpl implements ProjectManager {
       };
 
       // Restore original directory
-      process.chdir(originalCwd);
+      try { process.chdir(originalCwd); } catch {}
 
       this.logger.error(`Build failed: ${buildResult.error}`);
       return buildResult;
     }
   }
 
-  private async installDependencies(dependencies: string[]): Promise<void> {
+  private async installDependencies(dependencies: string[]): Promise<string> {
     const { spawn } = require('child_process');
     
     return new Promise((resolve, reject) => {
@@ -327,14 +333,13 @@ export class ProjectManagerImpl implements ProjectManager {
   }
 
   private async collectArtifacts(outputDir: string): Promise<any[]> {
-    const artifacts = [];
+    const artifacts: any[] = [];
     
     if (!await fs.pathExists(outputDir)) {
       return artifacts;
     }
 
     await this.collectArtifactsRecursive(outputDir, '', artifacts);
-    
     return artifacts;
   }
 
@@ -370,8 +375,8 @@ export class ProjectManagerImpl implements ProjectManager {
   async validateProject(project: Project): Promise<ValidationResult> {
     this.logger.info(`Validating project '${project.name}'`);
     
-    const errors = [];
-    const warnings = [];
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
 
     // Check if project directory exists
     if (!await fs.pathExists(project.path)) {
@@ -428,8 +433,9 @@ export class ProjectManagerImpl implements ProjectManager {
         errors.push({
           code: 'MISSING_FILE',
           message: `Required file '${file}' is missing`,
-          field: file
-        });
+          field: file,
+          severity: 'error'
+        } as ValidationError);
       }
     }
 
@@ -461,23 +467,31 @@ export class ProjectManagerImpl implements ProjectManager {
     this.logger.info('Listing all projects');
     
     const projects: Project[] = [];
-    
-    if (!await fs.pathExists(this.projectsDir)) {
-      return projects;
+
+    // Search in the configured projects directory and also the parent/data dir
+    const searchDirs: string[] = [this.projectsDir];
+    const parentDir = path.dirname(this.projectsDir);
+    if (parentDir && parentDir !== this.projectsDir) {
+      searchDirs.push(parentDir);
     }
 
-    const projectDirs = await fs.readdir(this.projectsDir);
-    
-    for (const projectDir of projectDirs) {
-      const projectPath = path.join(this.projectsDir, projectDir);
-      const metadataPath = path.join(projectPath, 'project.json');
-      
-      if (await fs.pathExists(metadataPath)) {
-        try {
-          const project = await fs.readJson(metadataPath);
-          projects.push(project);
-        } catch (error) {
-          this.logger.warn(`Failed to load project metadata from '${metadataPath}': ${error}`);
+    for (const dir of searchDirs) {
+      if (!await fs.pathExists(dir)) {
+        continue;
+      }
+
+      const entries = await fs.readdir(dir);
+      for (const entry of entries) {
+        const projectPath = path.join(dir, entry);
+        const metadataPath = path.join(projectPath, '.ai-builder', 'project.json');
+
+        if (await fs.pathExists(metadataPath)) {
+          try {
+            const project = await fs.readJson(metadataPath);
+            projects.push(project);
+          } catch (error) {
+            this.logger.warn(`Failed to load project metadata from '${metadataPath}': ${error}`);
+          }
         }
       }
     }

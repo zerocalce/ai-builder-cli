@@ -14,6 +14,10 @@ import { InitCommand } from './commands/core';
 import { BuildCommand } from './commands/core';
 import { DeployCommand } from './commands/core';
 import { StatusCommand } from './commands/core';
+import { ConfigCommand } from './commands/core';
+import { TemplatesCommand } from './commands/core';
+import { LogsCommand } from './commands/core';
+import { RollbackCommand } from './commands/core';
 
 class AutoBootstrap {
   private projectRoot: string;
@@ -140,6 +144,11 @@ async function main() {
     // cli.registerCommand(new TemplatesCommand(cli, projectManager, logger));
     // cli.registerCommand(new LogsCommand(cli, deploymentEngine, logger));
     // cli.registerCommand(new RollbackCommand(cli, deploymentEngine, logger));
+    // Register newly implemented commands
+    cli.registerCommand(new ConfigCommand(cli, configManager, logger));
+    cli.registerCommand(new TemplatesCommand(cli, projectManager, logger));
+    cli.registerCommand(new LogsCommand(cli, deploymentEngine, projectManager, logger));
+    cli.registerCommand(new RollbackCommand(cli, deploymentEngine, projectManager, logger));
 
     // Show welcome message for first-time users
     await showWelcomeIfNeeded(configManager, cli);

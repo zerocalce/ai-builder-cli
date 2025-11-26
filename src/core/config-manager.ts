@@ -7,7 +7,7 @@ import { ConfigManager, ConfigEntry, Logger } from '../types';
 export class ConfigManagerImpl implements ConfigManager {
   private configDir: string;
   private globalConfigPath: string;
-  private projectConfigPath: string;
+  private projectConfigPath?: string;
   private logger: Logger;
   private encryptionKey: string;
 
@@ -44,14 +44,15 @@ export class ConfigManagerImpl implements ConfigManager {
 
   private encrypt(value: string): string {
     const algorithm = 'aes-256-gcm';
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipher(algorithm, this.encryptionKey);
-    
+    const iv = crypto.randomBytes(12); // recommended 12 bytes for GCM
+    const key = Buffer.from(this.encryptionKey, 'hex');
+
+    const cipher = crypto.createCipheriv(algorithm, key, iv);
     let encrypted = cipher.update(value, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
+
     const tag = cipher.getAuthTag();
-    
+
     return iv.toString('hex') + ':' + tag.toString('hex') + ':' + encrypted;
   }
 
@@ -66,20 +67,21 @@ export class ConfigManagerImpl implements ConfigManager {
     const iv = Buffer.from(parts[0], 'hex');
     const tag = Buffer.from(parts[1], 'hex');
     const encrypted = parts[2];
-    
-    const decipher = crypto.createDecipher(algorithm, this.encryptionKey);
+
+    const key = Buffer.from(this.encryptionKey, 'hex');
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
     decipher.setAuthTag(tag);
-    
+
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    
+
     return decrypted;
   }
 
   async set(key: string, value: any, scope: 'global' | 'project' = 'global'): Promise<void> {
     this.logger.debug(`Setting config: ${key} (${scope})`);
     
-    const configPath = scope === 'global' ? this.globalConfigPath : this.projectConfigPath;
+    const configPath = scope === 'global' ? this.globalConfigPath : this.projectConfigPath!;
     
     if (scope === 'project' && !this.projectConfigPath) {
       throw new Error('Project config path not set. Call setProjectPath() first.');
@@ -119,7 +121,7 @@ export class ConfigManagerImpl implements ConfigManager {
   async get(key: string, scope: 'global' | 'project' = 'global'): Promise<any> {
     this.logger.debug(`Getting config: ${key} (${scope})`);
     
-    const configPath = scope === 'global' ? this.globalConfigPath : this.projectConfigPath;
+    const configPath = scope === 'global' ? this.globalConfigPath : this.projectConfigPath!;
     
     if (scope === 'project' && !this.projectConfigPath) {
       throw new Error('Project config path not set. Call setProjectPath() first.');
@@ -158,7 +160,7 @@ export class ConfigManagerImpl implements ConfigManager {
   async list(scope: 'global' | 'project' = 'global'): Promise<ConfigEntry[]> {
     this.logger.debug(`Listing config entries (${scope})`);
     
-    const configPath = scope === 'global' ? this.globalConfigPath : this.projectConfigPath;
+    const configPath = scope === 'global' ? this.globalConfigPath : this.projectConfigPath!;
     
     if (scope === 'project' && !this.projectConfigPath) {
       throw new Error('Project config path not set. Call setProjectPath() first.');
@@ -180,7 +182,7 @@ export class ConfigManagerImpl implements ConfigManager {
   async delete(key: string, scope: 'global' | 'project' = 'global'): Promise<void> {
     this.logger.debug(`Deleting config: ${key} (${scope})`);
     
-    const configPath = scope === 'global' ? this.globalConfigPath : this.projectConfigPath;
+    const configPath = scope === 'global' ? this.globalConfigPath : this.projectConfigPath!;
     
     if (scope === 'project' && !this.projectConfigPath) {
       throw new Error('Project config path not set. Call setProjectPath() first.');
@@ -271,7 +273,7 @@ export class ConfigManagerImpl implements ConfigManager {
   }
 
   async resetConfig(scope: 'global' | 'project' = 'global'): Promise<void> {
-    const configPath = scope === 'global' ? this.globalConfigPath : this.projectConfigPath;
+    const configPath = scope === 'global' ? this.globalConfigPath : this.projectConfigPath!;
     
     if (scope === 'project' && !this.projectConfigPath) {
       throw new Error('Project config path not set. Call setProjectPath() first.');

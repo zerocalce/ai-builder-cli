@@ -210,6 +210,10 @@ export interface DeploymentEngine {
   getStatus(deployment: Deployment): Promise<DeploymentStatus>;
   getLogs(deployment: Deployment): Promise<DeploymentLog[]>;
   cancelDeployment(deployment: Deployment): Promise<void>;
+  // Optional event emitter compatibility for implementations that extend EventEmitter
+  on?(event: string, handler: (...args: any[]) => void): void;
+  off?(event: string, handler: (...args: any[]) => void): void;
+  emit?(event: string, ...args: any[]): void;
 }
 
 export interface ConfigManager {
@@ -315,7 +319,7 @@ export interface ValidationWarning {
 // Cloud Provider Interfaces
 export interface CloudProvider {
   name: string;
-  type: 'aws' | 'azure' | 'gcp' | 'custom';
+  type: 'aws' | 'azure' | 'gcp' | 'custom' | 'local' | 'docker' | 'ssh' | 'vercel' | 'netlify';
   deploy(config: DeploymentConfig): Promise<DeploymentResult>;
   getStatus(deploymentId: string): Promise<DeploymentStatus>;
   rollback(deploymentId: string, targetVersion: string): Promise<void>;

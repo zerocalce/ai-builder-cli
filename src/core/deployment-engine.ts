@@ -442,14 +442,16 @@ export class DeploymentPipeline {
   }
 
   private setupEventListeners(): void {
-    this.deploymentEngine.on('deploymentCompleted', async (deployment) => {
-      await this.startHealthChecks(deployment);
-    });
+    if (this.deploymentEngine.on) {
+      this.deploymentEngine.on('deploymentCompleted', async (deployment: any) => {
+        await this.startHealthChecks(deployment);
+      });
 
-    this.deploymentEngine.on('deploymentFailed', (deployment) => {
-      this.logger.error(`Deployment ${deployment.id} failed, checking for rollback triggers`);
-      this.checkRollbackTriggers(deployment);
-    });
+      this.deploymentEngine.on('deploymentFailed', (deployment: any) => {
+        this.logger.error(`Deployment ${deployment.id} failed, checking for rollback triggers`);
+        this.checkRollbackTriggers(deployment);
+      });
+    }
   }
 
   async executeDeployment(project: Project, target: DeploymentTarget, options: {

@@ -371,7 +371,9 @@ async function createMockTemplate(name: string, testDir: string): Promise<void> 
   await fs.promises.mkdir(filesDir, { recursive: true });
   
   for (const file of templateConfig.files) {
-    await fs.promises.writeFile(path.join(filesDir, file.path), file.content);
+    const targetPath = path.join(filesDir, file.path);
+    await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.promises.writeFile(targetPath, file.content);
   }
 }
 

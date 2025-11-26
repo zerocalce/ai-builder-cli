@@ -631,3 +631,242 @@ export class StatusCommand implements CLICommand {
     return statusMap[status] || status;
   }
 }
+
+// Additional commands: logs, rollback, config, templates (basic/stub implementations)
+export class LogsCommand implements CLICommand {
+  name = 'logs';
+  description = 'View deployment logs for a deployment or project';
+
+  constructor(
+    private cli: CLIInterface,
+    private deploymentEngine: any,
+    private projectManager: ProjectManagerImpl,
+    private logger: any
+  ) {}
+
+  options = [
+    {
+      name: 'deployment',
+      alias: 'd',
+      description: 'Deployment ID to show logs for',
+      type: 'string' as const
+    },
+    {
+      name: 'project',
+      alias: 'p',
+      description: 'Project path to show deployment history logs for',
+      type: 'string' as const
+    }
+  ];
+
+  async handler(args: any): Promise<void> {
+    try {
+      if (args.deployment) {
+        const active = this.deploymentEngine.getActiveDeployments();
+        const dep = active.find((d: any) => d.id === args.deployment);
+        if (!dep) {
+          this.cli.error(`Deployment '${args.deployment}' not found`);
+          return;
+        }
+
+        const logs = await this.deploymentEngine.getLogs(dep);
+        this.cli.title(`📜 Logs for deployment ${dep.id}`);
+        logs.forEach((l: any) => {
+          console.log(`[${l.timestamp.toISOString()}] ${l.level.toUpperCase()} ${l.source}: ${l.message}`);
+        });
+        return;
+      }
+
+      if (args.project) {
+        const project = await this.projectManager.loadProject(args.project);
+        if (!project.deployments || project.deployments.length === 0) {
+          this.cli.info('No deployments found for project');
+          return;
+        }
+
+        for (const dep of project.deployments) {
+          this.cli.title(`📜 Logs for deployment ${dep.id}`);
+          const logs = dep.logs || [];
+          logs.forEach((l: any) => {
+            console.log(`[${new Date(l.timestamp).toISOString()}] ${l.level.toUpperCase()} ${l.source}: ${l.message}`);
+          });
+          this.cli.divider();
+        }
+        return;
+      }
+
+      this.cli.info('Please specify --deployment <id> or --project <path>');
+
+    } catch (error) {
+      this.cli.error(`Failed to retrieve logs: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+}
+
+export class RollbackCommand implements CLICommand {
+  name = 'rollback';
+  description = 'Rollback a deployment to a previous version';
+
+  constructor(
+    private cli: CLIInterface,
+    private deploymentEngine: any,
+    private projectManager: ProjectManagerImpl,
+    private logger: any
+  ) {}
+
+  options = [
+    {
+      name: 'deployment',
+      alias: 'd',
+      description: 'Deployment ID to rollback',
+      type: 'string' as const,
+      required: true
+    },
+    {
+      name: 'version',
+      alias: 'v',
+      description: 'Target version to rollback to',
+      type: 'string' as const,
+      required: true
+    }
+  ];
+
+  async handler(args: any): Promise<void> {
+    try {
+      const active = this.deploymentEngine.getActiveDeployments();
+      const dep = active.find((d: any) => d.id === args.deployment);
+      if (!dep) {
+        this.cli.error(`Deployment '${args.deployment}' not found or no longer active`);
+        return;
+      }
+
+      this.cli.info(`Rolling back deployment ${dep.id} to version ${args.version}...`);
+      await this.deploymentEngine.rollback(dep, args.version);
+      this.cli.success(`Rollback initiated for deployment ${dep.id}`);
+
+    } catch (error) {
+      this.cli.error(`Rollback failed: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+}
+
+export class ConfigCommand implements CLICommand {
+  name = 'config';
+  description = 'Manage configuration values (get|set|list|delete)';
+
+  constructor(
+    private cli: CLIInterface,
+    private configManager: any,
+    private logger: any
+  ) {}
+
+  options = [];
+
+  subcommands = [
+    {
+      name: 'set',
+      description: 'Set a configuration value',
+      options: [
+        { name: 'key', description: 'Config key', type: 'string', required: true },
+        { name: 'value', description: 'Config value', type: 'string', required: true },
+        { name: 'scope', description: 'Scope (global|project)', type: 'string', default: 'global' }
+      ],
+      handler: async (args: any) => {
+        await this.configManager.set(args.key, args.value, args.scope);
+        this.cli.success(`Config '${args.key}' set (${args.scope})`);
+      }
+    },
+    {
+      name: 'get',
+      description: 'Get a configuration value',
+      options: [
+        { name: 'key', description: 'Config key', type: 'string', required: true },
+        { name: 'scope', description: 'Scope (global|project)', type: 'string', default: 'global' }
+      ],
+      handler: async (args: any) => {
+        const value = await this.configManager.get(args.key, args.scope);
+        if (value === undefined) {
+          this.cli.info('Key not found');
+        } else {
+          this.cli.json({ [args.key]: value });
+        }
+      }
+    },
+    {
+      name: 'list',
+      description: 'List configuration entries',
+      options: [
+        { name: 'scope', description: 'Scope (global|project)', type: 'string', default: 'global' }
+      ],
+      handler: async (args: any) => {
+        const entries = await this.configManager.list(args.scope);
+        this.cli.json(entries);
+      }
+    },
+    {
+      name: 'delete',
+      description: 'Delete a config entry',
+      options: [
+        { name: 'key', description: 'Config key', type: 'string', required: true },
+        { name: 'scope', description: 'Scope (global|project)', type: 'string', default: 'global' }
+      ],
+      handler: async (args: any) => {
+        await this.configManager.delete(args.key, args.scope);
+        this.cli.success(`Config '${args.key}' deleted (${args.scope})`);
+      }
+    }
+  ];
+
+  async handler(_: any): Promise<void> {
+    this.cli.info('Use subcommands: set|get|list|delete');
+  }
+}
+
+export class TemplatesCommand implements CLICommand {
+  name = 'templates';
+  description = 'List and manage templates';
+
+  constructor(
+    private cli: CLIInterface,
+    private projectManager: ProjectManagerImpl,
+    private logger: any
+  ) {}
+
+  options = [];
+
+  subcommands = [
+    {
+      name: 'list',
+      description: 'List available templates',
+      options: [],
+      handler: async (_args: any) => {
+        // Return mock templates similar to InitCommand
+        const templates = [
+          { name: 'express-api', description: 'Express.js API with TypeScript' },
+          { name: 'react-app', description: 'React application with Vite' },
+          { name: 'fullstack-ai', description: 'Full-stack AI application' }
+        ];
+        this.cli.table(templates.map(t => ({ Name: t.name, Description: t.description })));
+      }
+    },
+    {
+      name: 'install',
+      description: 'Install a template by name',
+      options: [
+        { name: 'name', description: 'Template name', type: 'string', required: true }
+      ],
+      handler: async (args: any) => {
+        // Stub: pretend to install
+        this.cli.info(`Installing template '${args.name}'...`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        this.cli.success(`Template '${args.name}' installed`);
+      }
+    }
+  ];
+
+  async handler(_: any): Promise<void> {
+    this.cli.info('Use subcommands: list|install');
+  }
+}
