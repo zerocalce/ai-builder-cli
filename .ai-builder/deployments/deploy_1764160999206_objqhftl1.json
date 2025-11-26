@@ -1,0 +1,60 @@
+{
+  "id": "deploy_1764160999206_objqhftl1",
+  "projectId": "43d6028e-1f9c-4c58-acef-6e2dec2aad38",
+  "target": {
+    "name": "aws",
+    "type": "aws",
+    "config": {
+      "host": "localhost",
+      "port": 3000
+    },
+    "environment": "development"
+  },
+  "version": "1.0.0",
+  "status": "failed",
+  "logs": [
+    {
+      "id": "log_1764160999209_5u3jpqqdk",
+      "level": "info",
+      "message": "Starting build process",
+      "timestamp": "2025-11-26T12:43:19.209Z",
+      "source": "build-engine"
+    },
+    {
+      "id": "log_1764160999211_fjjmac3yd",
+      "level": "info",
+      "message": "Build completed successfully",
+      "timestamp": "2025-11-26T12:43:19.211Z",
+      "source": "build-engine"
+    },
+    {
+      "id": "log_1764160999216_g8wies19h",
+      "level": "info",
+      "message": "Starting deployment to aws",
+      "timestamp": "2025-11-26T12:43:19.216Z",
+      "source": "deployment-engine"
+    },
+    {
+      "id": "log_1764160999219_ykdbigl9a",
+      "level": "error",
+      "message": "Deployment failed",
+      "timestamp": "2025-11-26T12:43:19.219Z",
+      "source": "deployment-engine"
+    }
+  ],
+  "createdAt": "2025-11-26T12:43:19.206Z",
+  "buildResult": {
+    "success": true,
+    "output": "Build completed successfully",
+    "artifacts": [
+      {
+        "path": "dist/index.js",
+        "size": 1024,
+        "hash": "abc123",
+        "type": "file"
+      }
+    ],
+    "duration": 1500
+  },
+  "completedAt": "2025-11-26T12:43:19.219Z"
+}

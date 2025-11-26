@@ -1,4 +1,5 @@
 import { CLICommand, CommandArgs, Project, Template, Logger } from '../types';
+import MigrationManager from '../core/migration';
 import { CLIInterface } from '../cli/interface';
 import { ProjectManagerImpl } from '../core/project-manager';
 
@@ -663,13 +664,18 @@ export class LogsCommand implements CLICommand {
     try {
       if (args.deployment) {
         const active = this.deploymentEngine.getActiveDeployments();
-        const dep = active.find((d: any) => d.id === args.deployment);
+        let dep = active.find((d: any) => d.id === args.deployment);
+        if (!dep) {
+          // try persisted store
+          dep = await this.deploymentEngine.getPersistedDeployment(args.deployment) as any;
+        }
+
         if (!dep) {
           this.cli.error(`Deployment '${args.deployment}' not found`);
           return;
         }
 
-        const logs = await this.deploymentEngine.getLogs(dep);
+        const logs = await this.deploymentEngine.getLogs(dep as any);
         this.cli.title(`📜 Logs for deployment ${dep.id}`);
         logs.forEach((l: any) => {
           console.log(`[${l.timestamp.toISOString()}] ${l.level.toUpperCase()} ${l.source}: ${l.message}`);
@@ -735,15 +741,20 @@ export class RollbackCommand implements CLICommand {
   async handler(args: any): Promise<void> {
     try {
       const active = this.deploymentEngine.getActiveDeployments();
-      const dep = active.find((d: any) => d.id === args.deployment);
+      let dep = active.find((d: any) => d.id === args.deployment);
       if (!dep) {
-        this.cli.error(`Deployment '${args.deployment}' not found or no longer active`);
+        // try persisted store
+        dep = await this.deploymentEngine.getPersistedDeployment(args.deployment) as any;
+      }
+
+      if (!dep) {
+        this.cli.error(`Deployment '${args.deployment}' not found`);
         return;
       }
 
       this.cli.info(`Rolling back deployment ${dep.id} to version ${args.version}...`);
-      await this.deploymentEngine.rollback(dep, args.version);
-      this.cli.success(`Rollback initiated for deployment ${dep.id}`);
+      await this.deploymentEngine.rollback(dep as any, args.version);
+      this.cli.success(`Rollback completed for deployment ${dep.id}`);
 
     } catch (error) {
       this.cli.error(`Rollback failed: ${(error as Error).message}`);
@@ -868,5 +879,112 @@ export class TemplatesCommand implements CLICommand {
 
   async handler(_: any): Promise<void> {
     this.cli.info('Use subcommands: list|install');
+  }
+}
+
+export class DeploymentsCommand implements CLICommand {
+  name = 'deployments';
+  description = 'List persisted deployments';
+
+  constructor(
+    private cli: CLIInterface,
+    private deploymentEngine: any,
+    private logger: any
+  ) {}
+
+  options = [
+    {
+      name: 'project',
+      alias: 'p',
+      description: 'Filter deployments by projectId',
+      type: 'string' as const
+    }
+  ];
+
+  async handler(args: any): Promise<void> {
+    try {
+      const deployments = await this.deploymentEngine.listPersistedDeployments(args.project);
+      if (!deployments || deployments.length === 0) {
+        this.cli.info('No persisted deployments found');
+        return;
+      }
+
+      const rows = deployments.map((d: any) => ({
+        ID: d.id.substring(0, 12),
+        Project: (d.projectId || '').substring(0, 12),
+        Target: d.target?.name || d.target?.type || 'n/a',
+        Version: d.version,
+        Status: d.status,
+        Created: d.createdAt ? new Date(d.createdAt).toLocaleString() : 'n/a'
+      }));
+
+      this.cli.table(rows);
+    } catch (error) {
+      this.cli.error(`Failed to list deployments: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+}
+
+export class MigrateCommand implements CLICommand {
+  name = 'migrate';
+  description = 'Migrate file-backed deployments into SQLite';
+
+  constructor(
+    private cli: CLIInterface,
+    private logger: any
+  ) {}
+
+  options = [
+    { name: 'apply', alias: 'a', description: 'Apply migration (default is dry-run)', type: 'boolean' as const, default: false },
+    { name: 'source', description: 'Source directory for file deployments', type: 'string' as const },
+    { name: 'target', description: 'Target sqlite file path', type: 'string' as const },
+    { name: 'validate', description: 'Validate target sqlite after migration', type: 'boolean' as const, default: false },
+    { name: 'rollback', description: 'Restore from .bak backup', type: 'boolean' as const, default: false }
+  ];
+
+  async handler(args: any): Promise<void> {
+    try {
+      const apply = !!args.apply;
+      const source = args.source;
+      const target = args.target;
+      const validate = !!args.validate;
+
+      const mgr = new MigrationManager(this.logger);
+      mgr.on('progress', (s: any) => {
+        this.cli.info(`Migrating ${s.file} (${s.id})`);
+      });
+      mgr.on('error', (e: any) => {
+        this.cli.error(`Error migrating ${e.file}: ${e.error?.message || e.error}`);
+      });
+
+      if (validate) {
+        const v = await mgr.validateMigration(target);
+        if (v.valid) {
+          this.cli.success(`Validation OK - ${v.total} deployments present`);
+        } else {
+          this.cli.error('Validation failed');
+        }
+        return;
+      }
+
+      if (args.rollback) {
+        // create a timestamped pre-rollback backup for safety
+        const pre = await mgr.createPreRollbackBackup(target);
+        if (pre) this.cli.info(`Created pre-rollback backup: ${pre}`);
+
+        const ok = await mgr.restoreBackup(target);
+        if (ok) this.cli.success('Backup restored successfully');
+        else this.cli.error('No backup restored');
+        return;
+      }
+
+      const dryRun = !apply;
+      const res = await mgr.migrateFileToSQLite({ dryRun, sourceDir: source, sqlitePath: target });
+      this.cli.success(`Migration finished: ${res.migrated} migrated, ${res.skipped} skipped`);
+    } catch (err) {
+      this.cli.error(`Migration failed: ${(err as Error).message}`);
+      throw err;
+    }
   }
 }

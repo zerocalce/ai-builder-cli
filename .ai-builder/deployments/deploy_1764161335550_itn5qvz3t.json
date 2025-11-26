@@ -1,0 +1,82 @@
+{
+  "id": "deploy_1764161335550_itn5qvz3t",
+  "projectId": "0c4c1bf0-2a9c-4fc0-affc-1a29efd63ac9",
+  "target": {
+    "name": "local",
+    "type": "local",
+    "config": {
+      "host": "localhost",
+      "port": 3000
+    },
+    "environment": "development"
+  },
+  "version": "1.0.0",
+  "status": "rolled_back",
+  "logs": [
+    {
+      "id": "log_1764161335553_kmigzecvn",
+      "level": "info",
+      "message": "Starting build process",
+      "timestamp": "2025-11-26T12:48:55.553Z",
+      "source": "build-engine"
+    },
+    {
+      "id": "log_1764161335555_ap6wbepo0",
+      "level": "info",
+      "message": "Build completed successfully",
+      "timestamp": "2025-11-26T12:48:55.555Z",
+      "source": "build-engine"
+    },
+    {
+      "id": "log_1764161335562_rzze0mn1y",
+      "level": "info",
+      "message": "Starting deployment to local",
+      "timestamp": "2025-11-26T12:48:55.562Z",
+      "source": "deployment-engine"
+    },
+    {
+      "id": "log_1764161336565_9tix4bfz7",
+      "level": "info",
+      "message": "Deployment completed successfully",
+      "timestamp": "2025-11-26T12:48:56.565Z",
+      "source": "deployment-engine"
+    },
+    {
+      "id": "log_1764161336569_vf3itx044",
+      "level": "info",
+      "message": "Deployment URL: http://localhost:3000",
+      "timestamp": "2025-11-26T12:48:56.569Z",
+      "source": "deployment-engine"
+    },
+    {
+      "id": "log_1764161336580_kt3r6zsb2",
+      "level": "info",
+      "message": "Starting rollback to version 1.0.0",
+      "timestamp": "2025-11-26T12:48:56.580Z",
+      "source": "rollback-engine"
+    },
+    {
+      "id": "log_1764161337589_xbi59vpnp",
+      "level": "info",
+      "message": "Rollback to version 1.0.0 completed successfully",
+      "timestamp": "2025-11-26T12:48:57.589Z",
+      "source": "rollback-engine"
+    }
+  ],
+  "createdAt": "2025-11-26T12:48:55.550Z",
+  "buildResult": {
+    "success": true,
+    "output": "Build completed successfully",
+    "artifacts": [
+      {
+        "path": "dist/index.js",
+        "size": 1024,
+        "hash": "abc123",
+        "type": "file"
+      }
+    ],
+    "duration": 1500
+  },
+  "completedAt": "2025-11-26T12:48:56.565Z",
+  "rollbackFrom": "1.0.0"
+}

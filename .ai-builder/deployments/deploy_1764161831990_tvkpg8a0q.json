@@ -1,0 +1,67 @@
+{
+  "id": "deploy_1764161831990_tvkpg8a0q",
+  "projectId": "29a8f698-7478-4406-9fa8-be40aeb0ca7a",
+  "target": {
+    "name": "local",
+    "type": "local",
+    "config": {
+      "host": "localhost",
+      "port": 3000
+    },
+    "environment": "development"
+  },
+  "version": "1.0.0",
+  "status": "success",
+  "logs": [
+    {
+      "id": "log_1764161831993_cnqu9rmd2",
+      "level": "info",
+      "message": "Starting build process",
+      "timestamp": "2025-11-26T12:57:11.993Z",
+      "source": "build-engine"
+    },
+    {
+      "id": "log_1764161831995_8w2h6x30o",
+      "level": "info",
+      "message": "Build completed successfully",
+      "timestamp": "2025-11-26T12:57:11.995Z",
+      "source": "build-engine"
+    },
+    {
+      "id": "log_1764161832000_zs2wjmvfq",
+      "level": "info",
+      "message": "Starting deployment to local",
+      "timestamp": "2025-11-26T12:57:12.000Z",
+      "source": "deployment-engine"
+    },
+    {
+      "id": "log_1764161833017_67n6oxcgm",
+      "level": "info",
+      "message": "Deployment completed successfully",
+      "timestamp": "2025-11-26T12:57:13.017Z",
+      "source": "deployment-engine"
+    },
+    {
+      "id": "log_1764161833021_8imksioyu",
+      "level": "info",
+      "message": "Deployment URL: http://localhost:3000",
+      "timestamp": "2025-11-26T12:57:13.021Z",
+      "source": "deployment-engine"
+    }
+  ],
+  "createdAt": "2025-11-26T12:57:11.990Z",
+  "buildResult": {
+    "success": true,
+    "output": "Build completed successfully",
+    "artifacts": [
+      {
+        "path": "dist/index.js",
+        "size": 1024,
+        "hash": "abc123",
+        "type": "file"
+      }
+    ],
+    "duration": 1500
+  },
+  "completedAt": "2025-11-26T12:57:13.017Z"
+}

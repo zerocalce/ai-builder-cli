@@ -1,0 +1,92 @@
+import * as os from 'os';
+import * as path from 'path';
+import * as fs from 'fs-extra';
+import MigrationManager from '../src/core/migration';
+
+const sample = {
+  id: 'deploy_test_1',
+  projectId: 'proj_test_1',
+  target: { name: 'local', type: 'local' },
+  version: '0.1.0',
+  status: 'failed',
+  logs: [
+    { id: 'log1', level: 'info', message: 'start', timestamp: new Date().toISOString(), source: 'test' }
+  ],
+  createdAt: new Date().toISOString()
+};
+
+describe('MigrationManager E2E', () => {
+  let tmpdir: string;
+
+  beforeEach(async () => {
+    tmpdir = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-builder-test-'));
+    await fs.ensureDir(path.join(tmpdir, '.ai-builder', 'deployments'));
+  });
+
+  afterEach(async () => {
+    await fs.remove(tmpdir).catch(() => {});
+  });
+
+  test('dry-run does not create sqlite DB and reports migrated count', async () => {
+    const src = path.join(tmpdir, '.ai-builder', 'deployments');
+    const fpath = path.join(src, `${sample.id}.json`);
+    await fs.writeJson(fpath, sample, { spaces: 2 });
+
+    const mgr = new MigrationManager();
+    const res = await mgr.migrateFileToSQLite({ dryRun: true, sourceDir: src, sqlitePath: path.join(tmpdir, 'deployments.db') });
+    expect(res.migrated).toBe(1);
+    // DB should not exist after dry-run
+    const exists = await fs.pathExists(path.join(tmpdir, 'deployments.db'));
+    expect(exists).toBe(false);
+  });
+
+  test('apply creates sqlite DB and validate reports entries (skips if sqlite unavailable)', async () => {
+    const src = path.join(tmpdir, '.ai-builder', 'deployments');
+    const db = path.join(tmpdir, 'deployments.db');
+    const fpath = path.join(src, `${sample.id}.json`);
+    await fs.writeJson(fpath, sample, { spaces: 2 });
+
+    const mgr = new MigrationManager();
+    try {
+      const res = await mgr.migrateFileToSQLite({ dryRun: false, sourceDir: src, sqlitePath: db });
+      expect(res.migrated).toBe(1);
+
+      const v = await mgr.validateMigration(db);
+      expect(v.valid).toBe(true);
+      expect(v.total).toBeGreaterThanOrEqual(1);
+    } catch (err) {
+      // If better-sqlite3 isn't available in the environment, skip this test
+      const msg = (err as Error).message || '';
+      if (msg.includes('better-sqlite3') || msg.includes('cannot find module')) {
+        console.warn('better-sqlite3 not available, skipping sqlite apply test');
+        return;
+      }
+      throw err;
+    }
+  });
+
+  test('restore backup when finalization fails', async () => {
+    const src = path.join(tmpdir, '.ai-builder', 'deployments');
+    const db = path.join(tmpdir, 'deployments.db');
+    const fpath = path.join(src, `${sample.id}.json`);
+    await fs.writeJson(fpath, sample, { spaces: 2 });
+
+    // create an initial DB file to be backed up
+    await fs.writeFile(db, 'original-content');
+    expect(await fs.pathExists(db)).toBe(true);
+
+    const mgr = new MigrationManager();
+    let threw = false;
+    try {
+      await mgr.migrateFileToSQLite({ dryRun: false, sourceDir: src, sqlitePath: db, failOnFinalize: true });
+    } catch (err) {
+      threw = true;
+    }
+
+    expect(threw).toBe(true);
+    // original DB should have been restored (or still exist)
+    expect(await fs.pathExists(db)).toBe(true);
+    const content = await fs.readFile(db, 'utf8');
+    expect(content).toBe('original-content');
+  });
+});

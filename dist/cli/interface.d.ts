@@ -1,0 +1,34 @@
+import inquirer from 'inquirer';
+import { CLICommand, ProgressIndicator, Logger } from '../types';
+export declare class CLIInterface {
+    private program;
+    private logger;
+    private commands;
+    constructor(logger: Logger);
+    private setupProgram;
+    private handlePreAction;
+    registerCommand(command: CLICommand): void;
+    private registerSubcommand;
+    private parseCommandArgs;
+    private handleError;
+    execute(argv: string[]): Promise<void>;
+    createProgressIndicator(): ProgressIndicator;
+    prompt<T extends Record<string, any>>(questions: inquirer.QuestionCollection<T>): Promise<T>;
+    confirm(message: string): Promise<boolean>;
+    select(message: string, choices: string[]): Promise<string>;
+    input(message: string, defaultValue?: string): Promise<string>;
+    password(message: string): Promise<string>;
+    checkbox(message: string, choices: string[]): Promise<string[]>;
+    success(message: string): void;
+    error(message: string): void;
+    warning(message: string): void;
+    info(message: string): void;
+    highlight(message: string): void;
+    title(message: string): void;
+    subtitle(message: string): void;
+    table(data: Record<string, any>[]): void;
+    json(data: any, pretty?: boolean): void;
+    list(items: string[], bullet?: string): void;
+    divider(char?: string, length?: number): void;
+    newline(count?: number): void;
+}

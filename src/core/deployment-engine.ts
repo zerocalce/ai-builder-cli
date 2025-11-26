@@ -1,6 +1,8 @@
 import { EventEmitter } from 'events';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import * as os from 'os';
+import { FileDeploymentStore, DeploymentStore, SQLiteDeploymentStore } from './deployment-store';
 import { 
   Deployment, 
   DeploymentEngine, 
@@ -20,11 +22,34 @@ export class DeploymentEngineImpl extends EventEmitter implements DeploymentEngi
   private activeDeployments: Map<string, Deployment> = new Map();
   private cloudProviders: Map<string, CloudProvider> = new Map();
   private logger: Logger;
+  private store: DeploymentStore;
 
-  constructor(logger: Logger) {
+  constructor(logger: Logger, store?: DeploymentStore) {
     super();
     this.logger = logger;
+    // Default: try SQLite-backed store (faster, transactional). Fall back to file store if SQLite not available.
+    if (store) {
+      this.store = store;
+    } else {
+      try {
+        const dbPath = path.join(process.cwd(), '.ai-builder', 'deployments.db');
+        this.store = new SQLiteDeploymentStore(dbPath, logger);
+      } catch (err) {
+        // fallback to file store
+        this.logger?.warn('SQLite store not available, falling back to file-backed store');
+        this.store = new FileDeploymentStore(path.join(process.cwd(), '.ai-builder', 'deployments'), logger);
+      }
+    }
     this.initializeCloudProviders();
+  }
+
+  // Expose persisted store helpers
+  async listPersistedDeployments(projectId?: string): Promise<Deployment[]> {
+    return this.store.listDeployments(projectId);
+  }
+
+  async getPersistedDeployment(id: string): Promise<Deployment | null> {
+    return this.store.getDeployment(id);
   }
 
   private initializeCloudProviders(): void {
@@ -50,6 +75,8 @@ export class DeploymentEngineImpl extends EventEmitter implements DeploymentEngi
     };
 
     this.activeDeployments.set(deployment.id, deployment);
+    // Persist initial deployment record
+    await this.store.saveDeployment(deployment);
     this.emit('deploymentStarted', deployment);
 
     try {
@@ -65,6 +92,7 @@ export class DeploymentEngineImpl extends EventEmitter implements DeploymentEngi
 
       deployment.buildResult = buildResult;
       await this.addDeploymentLog(deployment, 'info', 'Build completed successfully', 'build-engine');
+      await this.store.saveDeployment(deployment);
 
       // Deploy to target
       await this.updateDeploymentStatus(deployment, DeploymentStatus.DEPLOYING);
@@ -91,9 +119,12 @@ export class DeploymentEngineImpl extends EventEmitter implements DeploymentEngi
       // Update deployment with result
       deployment.status = DeploymentStatus.SUCCESS;
       deployment.completedAt = new Date();
-      
+
       await this.addDeploymentLog(deployment, 'info', 'Deployment completed successfully', 'deployment-engine');
       await this.addDeploymentLog(deployment, 'info', `Deployment URL: ${result.url || 'N/A'}`, 'deployment-engine');
+
+      // Persist final state
+      await this.store.saveDeployment(deployment);
 
       this.emit('deploymentCompleted', deployment);
       this.logger.info(`Deployment '${deployment.id}' completed successfully`);
@@ -103,14 +134,17 @@ export class DeploymentEngineImpl extends EventEmitter implements DeploymentEngi
     } catch (error) {
       deployment.status = DeploymentStatus.FAILED;
       deployment.completedAt = new Date();
-      
+
       await this.addDeploymentLog(deployment, 'error', (error as Error).message, 'deployment-engine');
+      await this.store.saveDeployment(deployment);
       this.emit('deploymentFailed', deployment, error);
-      
+
       this.logger.error(`Deployment '${deployment.id}' failed: ${error}`);
       throw error;
     } finally {
       this.activeDeployments.delete(deployment.id);
+      // ensure last state persisted
+      try { await this.store.saveDeployment(deployment); } catch (err) { /* swallow */ }
     }
   }
 
@@ -131,14 +165,17 @@ export class DeploymentEngineImpl extends EventEmitter implements DeploymentEngi
       deployment.status = DeploymentStatus.ROLLED_BACK;
       deployment.rollbackFrom = deployment.version;
       deployment.version = version;
-      
+
       await this.addDeploymentLog(deployment, 'info', `Rollback to version ${version} completed successfully`, 'rollback-engine');
-      
+      // Persist rollback state
+      await this.store.saveDeployment(deployment);
+
       this.emit('rollbackCompleted', deployment);
       this.logger.info(`Rollback of deployment '${deployment.id}' completed successfully`);
 
     } catch (error) {
       await this.addDeploymentLog(deployment, 'error', `Rollback failed: ${(error as Error).message}`, 'rollback-engine');
+      await this.store.saveDeployment(deployment);
       this.emit('rollbackFailed', deployment, error);
       
       this.logger.error(`Rollback of deployment '${deployment.id}' failed: ${error}`);
@@ -168,6 +205,13 @@ export class DeploymentEngineImpl extends EventEmitter implements DeploymentEngi
   }
 
   async getLogs(deployment: Deployment): Promise<DeploymentLog[]> {
+    // If we have persisted logs, prefer them
+    try {
+      const stored = await this.store.getDeployment(deployment.id);
+      if (stored && stored.logs && stored.logs.length) return stored.logs;
+    } catch (err) {
+      // ignore
+    }
     return deployment.logs;
   }
 
@@ -221,6 +265,7 @@ export class DeploymentEngineImpl extends EventEmitter implements DeploymentEngi
   private async updateDeploymentStatus(deployment: Deployment, status: DeploymentStatus): Promise<void> {
     deployment.status = status;
     this.emit('statusUpdated', deployment, status);
+    try { await this.store.saveDeployment(deployment); } catch (err) { /* ignore */ }
   }
 
   private async addDeploymentLog(deployment: Deployment, level: 'info' | 'warn' | 'error' | 'debug', message: string, source: string): Promise<void> {
@@ -234,6 +279,7 @@ export class DeploymentEngineImpl extends EventEmitter implements DeploymentEngi
     
     deployment.logs.push(log);
     this.emit('logAdded', deployment, log);
+    try { await this.store.appendLog(deployment.id, log); } catch (err) { /* ignore */ }
   }
 
   private generateLogId(): string {

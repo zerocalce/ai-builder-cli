@@ -68,7 +68,7 @@ export class Logger {
 
   private log(level: LogLevel, message: string, meta?: any): void {
     const timestamp = new Date().toISOString();
-    const levelName = LogLevel[level];
+    const levelName = LogLevel[level].toString().toUpperCase();
 
     if (this.config.format === 'json') {
       const logEntry = {
@@ -94,11 +94,15 @@ export class Logger {
       if (meta) {
         if (meta.error) {
           console.log(`${color}  Error: ${meta.error.message}${reset}`);
-          if (process.env.NODE_ENV === 'development') {
+          if (this.shouldLog(LogLevel.DEBUG)) {
             console.log(`${color}  Stack: ${meta.error.stack}${reset}`);
           }
         } else {
-          console.log(`${color}  Meta: ${JSON.stringify(meta, null, 2)}${reset}`);
+          try {
+            console.log(`${color}  Meta: ${JSON.stringify(meta, null, 2)}${reset}`);
+          } catch (_) {
+            console.log(`${color}  Meta: [unserializable]${reset}`);
+          }
         }
       }
     }

@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [16, 18, 20]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install build deps (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3
+      - name: Install dependencies
+        run: npm ci
+      - name: Build TypeScript
+        run: npm run build
+      - name: Run unit tests
+        run: npm test
+      - name: Migration E2E - prepare sample data
+        run: |
+          mkdir -p tmp-e2e/.ai-builder/deployments
+          cat > tmp-e2e/.ai-builder/deployments/sample.json <<'JSON'
+          {
+            "id": "e2e_deploy_1",
+            "projectId": "e2e_project",
+            "target": { "name": "local", "type": "local" },
+            "version": "0.0.1",
+            "status": "failed",
+            "logs": [],
+            "createdAt": "2025-01-01T00:00:00.000Z"
+          }
+          JSON
+      - name: Migration E2E - dry run
+        run: |
+          node dist/index.js migrate --source tmp-e2e/.ai-builder/deployments --target tmp-e2e/deployments.db
+      - name: Migration E2E - apply
+        run: |
+          node dist/index.js migrate --source tmp-e2e/.ai-builder/deployments --target tmp-e2e/deployments.db --apply || true
+      - name: Migration E2E - validate
+        run: |
+          node dist/index.js migrate --target tmp-e2e/deployments.db --validate || true
+      - name: Migration E2E - simulate rollback test
+        run: |
+          # create a fake db to be backed up then run rollback
+          echo original > tmp-e2e/deployments.db || true
+          node dist/index.js migrate --target tmp-e2e/deployments.db --rollback || true

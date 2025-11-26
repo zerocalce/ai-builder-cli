@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "rootDir": "src",
+    "rootDir": ".",
     "types": ["node", "jest"]
   },
   "include": ["src", "tests"],

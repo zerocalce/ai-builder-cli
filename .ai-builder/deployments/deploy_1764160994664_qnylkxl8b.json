@@ -1,0 +1,33 @@
+{
+  "id": "deploy_1764160994664_qnylkxl8b",
+  "projectId": "15fea4c5-f058-4545-8c6e-7e41ebcf3b6b",
+  "target": {
+    "name": "aws",
+    "type": "aws",
+    "config": {
+      "host": "localhost",
+      "port": 3000
+    },
+    "environment": "development"
+  },
+  "version": "1.0.0",
+  "status": "failed",
+  "logs": [
+    {
+      "id": "log_1764160994667_cbrigv2nr",
+      "level": "info",
+      "message": "Starting build process",
+      "timestamp": "2025-11-26T12:43:14.667Z",
+      "source": "build-engine"
+    },
+    {
+      "id": "log_1764160994669_mkxmy41oa",
+      "level": "error",
+      "message": "Build failed",
+      "timestamp": "2025-11-26T12:43:14.669Z",
+      "source": "deployment-engine"
+    }
+  ],
+  "createdAt": "2025-11-26T12:43:14.664Z",
+  "completedAt": "2025-11-26T12:43:14.669Z"
+}
