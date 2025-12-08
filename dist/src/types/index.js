@@ -11,4 +11,4 @@ var DeploymentStatus;
     DeploymentStatus["FAILED"] = "failed";
     DeploymentStatus["ROLLING_BACK"] = "rolling_back";
     DeploymentStatus["ROLLED_BACK"] = "rolled_back";
-})(DeploymentStatus = exports.DeploymentStatus || (exports.DeploymentStatus = {}));
+})(DeploymentStatus || (exports.DeploymentStatus = DeploymentStatus = {}));

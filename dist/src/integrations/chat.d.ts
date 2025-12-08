@@ -1,6 +1,6 @@
-/// <reference types="node" />
 import { EventEmitter } from 'events';
 import { ChatCommands, Project, Deployment, Logger, PluginHooks } from '../types';
+import { ModelRegistry } from './model-registry';
 export interface ChatMessage {
     id: string;
     type: 'user' | 'assistant' | 'system';
@@ -40,7 +40,8 @@ export declare class ChatInterface extends EventEmitter implements ChatCommands 
     private projectManager;
     private deploymentEngine;
     private aiProvider;
-    constructor(logger: Logger, projectManager: any, deploymentEngine: any, port?: number);
+    private modelRegistry?;
+    constructor(logger: Logger, projectManager: any, deploymentEngine: any, port?: number, modelRegistry?: ModelRegistry);
     private setupWebSocketServer;
     private handleConnection;
     private handleMessage;
