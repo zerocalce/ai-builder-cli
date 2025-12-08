@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import { EventEmitter } from 'events';
 import { DeploymentStore } from './deployment-store';
 import { Deployment, DeploymentEngine, DeploymentStatus, DeploymentTarget, Project, DeploymentLog, Logger } from '../types';

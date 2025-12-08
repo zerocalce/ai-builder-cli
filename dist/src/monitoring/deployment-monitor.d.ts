@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import { EventEmitter } from 'events';
 import { Deployment, DeploymentStatus, DeploymentLog, Logger as ILogger } from '../types';
 export interface MonitoringConfig {

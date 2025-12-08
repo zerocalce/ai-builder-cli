@@ -7,7 +7,7 @@ var LogLevel;
     LogLevel[LogLevel["INFO"] = 1] = "INFO";
     LogLevel[LogLevel["WARN"] = 2] = "WARN";
     LogLevel[LogLevel["ERROR"] = 3] = "ERROR";
-})(LogLevel = exports.LogLevel || (exports.LogLevel = {}));
+})(LogLevel || (exports.LogLevel = LogLevel = {}));
 class Logger {
     constructor(config = {}) {
         this.config = {
@@ -65,9 +65,9 @@ class Logger {
         }
         else {
             const colors = {
-                [LogLevel.DEBUG]: '\x1b[36m',
-                [LogLevel.INFO]: '\x1b[32m',
-                [LogLevel.WARN]: '\x1b[33m',
+                [LogLevel.DEBUG]: '\x1b[36m', // cyan
+                [LogLevel.INFO]: '\x1b[32m', // green
+                [LogLevel.WARN]: '\x1b[33m', // yellow
                 [LogLevel.ERROR]: '\x1b[31m' // red
             };
             const reset = '\x1b[0m';

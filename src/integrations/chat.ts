@@ -1,12 +1,14 @@
 import { EventEmitter } from 'events';
 import * as WebSocket from 'ws';
-import { 
+import {
   ChatCommands,
   Project,
   Deployment,
   Logger,
   PluginHooks
 } from '../types';
+import { ModelRegistry } from './model-registry';
+import { AIModelRequest, AIModelResponse } from '../types/ai-models';
 
 export interface ChatMessage {
   id: string;
@@ -52,18 +54,21 @@ export class ChatInterface extends EventEmitter implements ChatCommands {
   private projectManager: any;
   private deploymentEngine: any;
   private aiProvider: AIProvider;
+  private modelRegistry?: ModelRegistry;
 
   constructor(
     logger: Logger,
     projectManager: any,
     deploymentEngine: any,
-    port: number = 8080
+    port: number = 8080,
+    modelRegistry?: ModelRegistry
   ) {
     super();
     this.logger = logger;
     this.projectManager = projectManager;
     this.deploymentEngine = deploymentEngine;
-    this.aiProvider = new AIProvider(logger);
+    this.modelRegistry = modelRegistry;
+    this.aiProvider = new AIProvider(logger, modelRegistry);
     
     this.wsServer = new WebSocket.Server({ port });
     this.setupWebSocketServer();
@@ -371,12 +376,119 @@ export class ChatInterface extends EventEmitter implements ChatCommands {
 
 class AIProvider {
   private logger: Logger;
+  private modelRegistry?: ModelRegistry;
+  private useAdvancedModel: boolean = false;
 
-  constructor(logger: Logger) {
+  constructor(logger: Logger, modelRegistry?: ModelRegistry) {
     this.logger = logger;
+    this.modelRegistry = modelRegistry;
+    this.useAdvancedModel = !!modelRegistry;
   }
 
   async generateResponse(message: string, context: any): Promise<AIResponse> {
+    // Use Grok Code Fast 1 if available
+    if (this.useAdvancedModel && this.modelRegistry) {
+      return await this.generateAdvancedResponse(message, context);
+    }
+
+    // Fallback to rule-based responses
+    return await this.generateRuleBasedResponse(message, context);
+  }
+
+  private async generateAdvancedResponse(message: string, context: any): Promise<AIResponse> {
+    try {
+      const provider = this.modelRegistry!.getProvider();
+      if (!provider) {
+        this.logger.warn('No AI model provider available, falling back to rule-based');
+        return await this.generateRuleBasedResponse(message, context);
+      }
+
+      // Check consent
+      const consentManager = this.modelRegistry!.getConsentManager();
+      const userId = context.userId || 'anonymous';
+      const hasConsent = await consentManager.hasConsent(userId, provider.config.modelId);
+
+      if (!hasConsent) {
+        const consentRequest = await consentManager.requestConsent({
+          userId,
+          modelId: provider.config.modelId,
+          modelDescription: provider.config.description
+        });
+
+        if (consentRequest.required) {
+          return {
+            message: `To use the advanced AI features powered by ${provider.config.name}, we need your consent.\n\n${consentRequest.consentPrompt?.dataUsagePolicy}\n\nWould you like to provide consent? Reply with "I consent" to continue.`,
+            actions: [{
+              type: 'create_project',
+              description: 'Provide consent',
+              parameters: { consent: true },
+              confirmation_required: true
+            }]
+          };
+        }
+      }
+
+      // Build AI request
+      const request: AIModelRequest = {
+        prompt: message,
+        context: {
+          conversationHistory: context.recentMessages,
+          projectContext: context.currentProject ? {
+            projectId: context.currentProject,
+            projectName: context.currentProject,
+            template: 'unknown',
+            technologies: []
+          } : undefined,
+          userContext: {
+            userId,
+            sessionId: context.sessionId || 'unknown'
+          }
+        },
+        metadata: {
+          userId,
+          sessionId: context.sessionId
+        }
+      };
+
+      // Get AI response
+      const aiResponse: AIModelResponse = await provider.generateResponse(request);
+
+      // Track analytics
+      const tracker = this.modelRegistry!.getAnalyticsTracker();
+      await tracker.trackResponse({
+        modelId: provider.config.modelId,
+        userId,
+        sessionId: context.sessionId || 'unknown',
+        responseLength: aiResponse.content.length,
+        finishReason: aiResponse.finishReason,
+        cached: aiResponse.metadata.cached || false,
+        performanceMetrics: aiResponse.usage
+      });
+
+      return {
+        message: aiResponse.content,
+        actions: this.extractActionsFromResponse(aiResponse.content)
+      };
+
+    } catch (error) {
+      this.logger.error('Advanced AI response failed, falling back', error as Error);
+      return await this.generateRuleBasedResponse(message, context);
+    }
+  }
+
+  private extractActionsFromResponse(content: string): ChatAction[] | undefined {
+    // Parse the AI response to extract any action suggestions
+    // This is a simplified version - could be more sophisticated
+    const actions: ChatAction[] = [];
+    
+    if (content.toLowerCase().includes('deploy')) {
+      // Extract deployment action if mentioned
+    }
+    
+    return actions.length > 0 ? actions : undefined;
+  }
+
+  private async generateRuleBasedResponse(message: string, context: any): Promise<AIResponse> {
     // Simulate AI processing
     await new Promise(resolve => setTimeout(resolve, 1000));
     
@@ -441,8 +553,12 @@ class AIProvider {
     }
     
     // Default response
+    const defaultMessage = this.useAdvancedModel && this.modelRegistry
+      ? `I understand you want to: "${message}". I'm powered by ${this.modelRegistry.getProvider()?.config.name || 'AI'} and can help you with:\n\n• Deploying projects\n• Checking deployment status\n• Creating new projects\n• Listing existing projects\n• Rolling back deployments\n• Code generation and analysis\n\nWhat would you like me to help you with?`
+      : `I understand you want to: "${message}". I can help you with:\n\n• Deploying projects\n• Checking deployment status\n• Creating new projects\n• Listing existing projects\n• Rolling back deployments\n\nWhat would you like me to help you with?`;
+
     return {
-      message: `I understand you want to: "${message}". I can help you with:\n\n• Deploying projects\n• Checking deployment status\n• Creating new projects\n• Listing existing projects\n• Rolling back deployments\n\nWhat would you like me to help you with?`
+      message: defaultMessage
     };
   }
 

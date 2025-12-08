@@ -139,5 +139,3 @@ export class SQLiteDeploymentStore implements DeploymentStore {
     return rows.map((r: any) => ({ id: '', level: r.level, message: r.message, timestamp: new Date(r.ts), source: '' } as DeploymentLog));
   }
 }
- 
-}

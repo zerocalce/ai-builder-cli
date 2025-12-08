@@ -15,25 +15,36 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatPluginHooks = exports.ChatInterface = void 0;
 const events_1 = require("events");
 const WebSocket = __importStar(require("ws"));
 class ChatInterface extends events_1.EventEmitter {
-    constructor(logger, projectManager, deploymentEngine, port = 8080) {
+    constructor(logger, projectManager, deploymentEngine, port = 8080, modelRegistry) {
         super();
         this.sessions = new Map();
         this.logger = logger;
         this.projectManager = projectManager;
         this.deploymentEngine = deploymentEngine;
-        this.aiProvider = new AIProvider(logger);
+        this.modelRegistry = modelRegistry;
+        this.aiProvider = new AIProvider(logger, modelRegistry);
         this.wsServer = new WebSocket.Server({ port });
         this.setupWebSocketServer();
         this.logger.info(`Chat interface started on port ${port}`);
@@ -288,10 +299,105 @@ class ChatInterface extends events_1.EventEmitter {
 }
 exports.ChatInterface = ChatInterface;
 class AIProvider {
-    constructor(logger) {
+    constructor(logger, modelRegistry) {
+        this.useAdvancedModel = false;
         this.logger = logger;
+        this.modelRegistry = modelRegistry;
+        this.useAdvancedModel = !!modelRegistry;
     }
     async generateResponse(message, context) {
+        // Use Grok Code Fast 1 if available
+        if (this.useAdvancedModel && this.modelRegistry) {
+            return await this.generateAdvancedResponse(message, context);
+        }
+        // Fallback to rule-based responses
+        return await this.generateRuleBasedResponse(message, context);
+    }
+    async generateAdvancedResponse(message, context) {
+        var _a;
+        try {
+            const provider = this.modelRegistry.getProvider();
+            if (!provider) {
+                this.logger.warn('No AI model provider available, falling back to rule-based');
+                return await this.generateRuleBasedResponse(message, context);
+            }
+            // Check consent
+            const consentManager = this.modelRegistry.getConsentManager();
+            const userId = context.userId || 'anonymous';
+            const hasConsent = await consentManager.hasConsent(userId, provider.config.modelId);
+            if (!hasConsent) {
+                const consentRequest = await consentManager.requestConsent({
+                    userId,
+                    modelId: provider.config.modelId,
+                    modelDescription: provider.config.description
+                });
+                if (consentRequest.required) {
+                    return {
+                        message: `To use the advanced AI features powered by ${provider.config.name}, we need your consent.\n\n${(_a = consentRequest.consentPrompt) === null || _a === void 0 ? void 0 : _a.dataUsagePolicy}\n\nWould you like to provide consent? Reply with "I consent" to continue.`,
+                        actions: [{
+                                type: 'create_project',
+                                description: 'Provide consent',
+                                parameters: { consent: true },
+                                confirmation_required: true
+                            }]
+                    };
+                }
+            }
+            // Build AI request
+            const request = {
+                prompt: message,
+                context: {
+                    conversationHistory: context.recentMessages,
+                    projectContext: context.currentProject ? {
+                        projectId: context.currentProject,
+                        projectName: context.currentProject,
+                        template: 'unknown',
+                        technologies: []
+                    } : undefined,
+                    userContext: {
+                        userId,
+                        sessionId: context.sessionId || 'unknown'
+                    }
+                },
+                metadata: {
+                    userId,
+                    sessionId: context.sessionId
+                }
+            };
+            // Get AI response
+            const aiResponse = await provider.generateResponse(request);
+            // Track analytics
+            const tracker = this.modelRegistry.getAnalyticsTracker();
+            await tracker.trackResponse({
+                modelId: provider.config.modelId,
+                userId,
+                sessionId: context.sessionId || 'unknown',
+                responseLength: aiResponse.content.length,
+                finishReason: aiResponse.finishReason,
+                cached: aiResponse.metadata.cached || false,
+                performanceMetrics: aiResponse.usage
+            });
+            return {
+                message: aiResponse.content,
+                actions: this.extractActionsFromResponse(aiResponse.content)
+            };
+        }
+        catch (error) {
+            this.logger.error('Advanced AI response failed, falling back', error);
+            return await this.generateRuleBasedResponse(message, context);
+        }
+    }
+    extractActionsFromResponse(content) {
+        // Parse the AI response to extract any action suggestions
+        // This is a simplified version - could be more sophisticated
+        const actions = [];
+        if (content.toLowerCase().includes('deploy')) {
+            // Extract deployment action if mentioned
+        }
+        return actions.length > 0 ? actions : undefined;
+    }
+    async generateRuleBasedResponse(message, context) {
+        var _a;
         // Simulate AI processing
         await new Promise(resolve => setTimeout(resolve, 1000));
         const lowerMessage = message.toLowerCase();
@@ -348,8 +454,11 @@ class AIProvider {
             };
         }
         // Default response
+        const defaultMessage = this.useAdvancedModel && this.modelRegistry
+            ? `I understand you want to: "${message}". I'm powered by ${((_a = this.modelRegistry.getProvider()) === null || _a === void 0 ? void 0 : _a.config.name) || 'AI'} and can help you with:\n\n• Deploying projects\n• Checking deployment status\n• Creating new projects\n• Listing existing projects\n• Rolling back deployments\n• Code generation and analysis\n\nWhat would you like me to help you with?`
+            : `I understand you want to: "${message}". I can help you with:\n\n• Deploying projects\n• Checking deployment status\n• Creating new projects\n• Listing existing projects\n• Rolling back deployments\n\nWhat would you like me to help you with?`;
         return {
-            message: `I understand you want to: "${message}". I can help you with:\n\n• Deploying projects\n• Checking deployment status\n• Creating new projects\n• Listing existing projects\n• Rolling back deployments\n\nWhat would you like me to help you with?`
+            message: defaultMessage
         };
     }
     extractProjectName(message) {
