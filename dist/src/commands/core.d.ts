@@ -160,13 +160,13 @@ export declare class ConfigCommand implements CLICommand {
         options: ({
             name: string;
             description: string;
-            type: string;
+            type: "string";
             required: boolean;
             default?: undefined;
         } | {
             name: string;
             description: string;
-            type: string;
+            type: "string";
             default: string;
             required?: undefined;
         })[];
@@ -188,7 +188,7 @@ export declare class TemplatesCommand implements CLICommand {
         options: {
             name: string;
             description: string;
-            type: string;
+            type: "string";
             required: boolean;
         }[];
         handler: (args: any) => Promise<void>;

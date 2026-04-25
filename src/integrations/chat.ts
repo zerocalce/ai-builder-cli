@@ -72,11 +72,11 @@ export class ChatInterface extends EventEmitter implements ChatCommands {
   }
 
   private setupWebSocketServer(): void {
-    this.wsServer.on('connection', (ws: WebSocket, request) => {
+    this.wsServer.on('connection', (ws: WebSocket, request: any) => {
       this.handleConnection(ws, request);
     });
 
-    this.wsServer.on('error', (error) => {
+    this.wsServer.on('error', (error: any) => {
       this.logger.error(`WebSocket server error: ${error}`);
     });
   }
@@ -298,7 +298,7 @@ export class ChatInterface extends EventEmitter implements ChatCommands {
         return 'No projects found';
       }
       
-      const projectList = projects.map(p => `• ${p.name} (${p.template})`).join('\n');
+      const projectList = projects.map((p: any) => `• ${p.name} (${p.template})`).join('\n');
       return `Available projects:\n${projectList}`;
     } catch (error) {
       return `❌ Failed to list projects: ${(error as Error).message}`;
@@ -310,7 +310,7 @@ export class ChatInterface extends EventEmitter implements ChatCommands {
       const project = await this.projectManager.loadProject(projectName);
       const deployments = project.deployments;
       
-      const deploymentToRollback = deployments.find(d => d.version === version);
+      const deploymentToRollback = deployments.find((d: any) => d.version === version);
       if (!deploymentToRollback) {
         return `❌ Deployment with version '${version}' not found`;
       }
