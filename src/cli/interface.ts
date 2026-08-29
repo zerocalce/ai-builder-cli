@@ -26,7 +26,7 @@ export class CLIInterface {
       .option('-v, --verbose', 'Enable verbose logging')
       .option('--config <path>', 'Path to config file')
       .option('--no-color', 'Disable colored output')
-      .hook('preAction', (thisCommand) => {
+      .hook('preAction', (thisCommand: any) => {
         this.handlePreAction(thisCommand);
       });
   }
@@ -63,7 +63,7 @@ export class CLIInterface {
     }
 
     // Set the handler
-    cmd.action(async (args, ...rest) => {
+    cmd.action(async (args: any, ...rest: any[]) => {
       try {
         const commandArgs = this.parseCommandArgs(args, command.options);
         await command.handler(commandArgs);
@@ -87,7 +87,7 @@ export class CLIInterface {
     });
 
     // Set the handler
-    cmd.action(async (args) => {
+    cmd.action(async (args: any) => {
       try {
         const commandArgs = this.parseCommandArgs(args, subcommand.options);
         await subcommand.handler(commandArgs);

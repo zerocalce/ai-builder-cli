@@ -43,6 +43,7 @@ const core_7 = require("./commands/core");
 const core_8 = require("./commands/core");
 const core_9 = require("./commands/core");
 const core_10 = require("./commands/core");
+const navigator_1 = require("./commands/navigator");
 class AutoBootstrap {
     constructor() {
         this.projectRoot = path.join(__dirname, '..');
@@ -158,6 +159,7 @@ async function main() {
         cli.registerCommand(new core_8.RollbackCommand(cli, deploymentEngine, projectManager, logger));
         cli.registerCommand(new core_9.DeploymentsCommand(cli, deploymentEngine, logger));
         cli.registerCommand(new core_10.MigrateCommand(cli, logger));
+        cli.registerCommand(new navigator_1.NavigatorCommand(cli, logger));
         // Show welcome message for first-time users
         await showWelcomeIfNeeded(configManager, cli);
         // Execute CLI

@@ -228,7 +228,7 @@ class ChatInterface extends events_1.EventEmitter {
             if (projects.length === 0) {
                 return 'No projects found';
             }
-            const projectList = projects.map(p => `• ${p.name} (${p.template})`).join('\n');
+            const projectList = projects.map((p) => `• ${p.name} (${p.template})`).join('\n');
             return `Available projects:\n${projectList}`;
         }
         catch (error) {
@@ -239,7 +239,7 @@ class ChatInterface extends events_1.EventEmitter {
         try {
             const project = await this.projectManager.loadProject(projectName);
             const deployments = project.deployments;
-            const deploymentToRollback = deployments.find(d => d.version === version);
+            const deploymentToRollback = deployments.find((d) => d.version === version);
             if (!deploymentToRollback) {
                 return `❌ Deployment with version '${version}' not found`;
             }

@@ -20,6 +20,7 @@ import { LogsCommand } from './commands/core';
 import { RollbackCommand } from './commands/core';
 import { DeploymentsCommand } from './commands/core';
 import { MigrateCommand } from './commands/core';
+import { NavigatorCommand } from './commands/navigator';
 
 class AutoBootstrap {
   private projectRoot: string;
@@ -153,6 +154,7 @@ async function main() {
     cli.registerCommand(new RollbackCommand(cli, deploymentEngine, projectManager, logger));
     cli.registerCommand(new DeploymentsCommand(cli, deploymentEngine, logger));
     cli.registerCommand(new MigrateCommand(cli, logger));
+    cli.registerCommand(new NavigatorCommand(cli, logger));
 
     // Show welcome message for first-time users
     await showWelcomeIfNeeded(configManager, cli);

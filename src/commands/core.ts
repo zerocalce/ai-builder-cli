@@ -1,6 +1,7 @@
 import { CLICommand, CommandArgs, Project, Template, Logger } from '../types';
 import MigrationManager from '../core/migration';
 import { CLIInterface } from '../cli/interface';
+import * as path from 'path';
 import { ProjectManagerImpl } from '../core/project-manager';
 
 export class InitCommand implements CLICommand {
@@ -780,9 +781,9 @@ export class ConfigCommand implements CLICommand {
       name: 'set',
       description: 'Set a configuration value',
       options: [
-        { name: 'key', description: 'Config key', type: 'string', required: true },
-        { name: 'value', description: 'Config value', type: 'string', required: true },
-        { name: 'scope', description: 'Scope (global|project)', type: 'string', default: 'global' }
+        { name: 'key', description: 'Config key', type: 'string' as const, required: true },
+        { name: 'value', description: 'Config value', type: 'string' as const, required: true },
+        { name: 'scope', description: 'Scope (global|project)', type: 'string' as const, default: 'global' }
       ],
       handler: async (args: any) => {
         await this.configManager.set(args.key, args.value, args.scope);
@@ -793,8 +794,8 @@ export class ConfigCommand implements CLICommand {
       name: 'get',
       description: 'Get a configuration value',
       options: [
-        { name: 'key', description: 'Config key', type: 'string', required: true },
-        { name: 'scope', description: 'Scope (global|project)', type: 'string', default: 'global' }
+        { name: 'key', description: 'Config key', type: 'string' as const, required: true },
+        { name: 'scope', description: 'Scope (global|project)', type: 'string' as const, default: 'global' }
       ],
       handler: async (args: any) => {
         const value = await this.configManager.get(args.key, args.scope);
@@ -809,7 +810,7 @@ export class ConfigCommand implements CLICommand {
       name: 'list',
       description: 'List configuration entries',
       options: [
-        { name: 'scope', description: 'Scope (global|project)', type: 'string', default: 'global' }
+        { name: 'scope', description: 'Scope (global|project)', type: 'string' as const, default: 'global' }
       ],
       handler: async (args: any) => {
         const entries = await this.configManager.list(args.scope);
@@ -820,8 +821,8 @@ export class ConfigCommand implements CLICommand {
       name: 'delete',
       description: 'Delete a config entry',
       options: [
-        { name: 'key', description: 'Config key', type: 'string', required: true },
-        { name: 'scope', description: 'Scope (global|project)', type: 'string', default: 'global' }
+        { name: 'key', description: 'Config key', type: 'string' as const, required: true },
+        { name: 'scope', description: 'Scope (global|project)', type: 'string' as const, default: 'global' }
       ],
       handler: async (args: any) => {
         await this.configManager.delete(args.key, args.scope);
@@ -866,7 +867,7 @@ export class TemplatesCommand implements CLICommand {
       name: 'install',
       description: 'Install a template by name',
       options: [
-        { name: 'name', description: 'Template name', type: 'string', required: true }
+        { name: 'name', description: 'Template name', type: 'string' as const, required: true }
       ],
       handler: async (args: any) => {
         // Stub: pretend to install

@@ -108,7 +108,7 @@ export class SQLiteDeploymentStore implements DeploymentStore {
 
   async saveDeployment(d: Deployment): Promise<void> {
     const stmt = this.db.prepare('INSERT OR REPLACE INTO deployments (id, projectId, createdAt, data) VALUES (?, ?, ?, ?)');
-    stmt.run(d.id, d.projectId || null, d.createdAt ? d.createdAt.getTime() : Date.now(), JSON.stringify(d));
+    stmt.run(d.id, d.projectId || null, d.createdAt ? new Date(d.createdAt).getTime() : Date.now(), JSON.stringify(d));
   }
 
   async getDeployment(id: string): Promise<Deployment | null> {
@@ -131,6 +131,13 @@ export class SQLiteDeploymentStore implements DeploymentStore {
   async appendLog(id: string, log: DeploymentLog): Promise<void> {
     const stmt = this.db.prepare('INSERT INTO deployment_logs (deploymentId, ts, level, message) VALUES (?, ?, ?, ?)');
     stmt.run(id, log.timestamp ? new Date(log.timestamp).getTime() : Date.now(), log.level || 'info', log.message || '');
+    // Append log to deployment data directly
+    const deployment = await this.getDeployment(id);
+    if (deployment) {
+      deployment.logs = deployment.logs || [];
+      deployment.logs.push(log);
+      await this.saveDeployment(deployment);
+    }
   }
 
   async getDeploymentHistory(id: string): Promise<DeploymentLog[]> {
@@ -138,6 +145,4 @@ export class SQLiteDeploymentStore implements DeploymentStore {
     const rows = stmt.all(id);
     return rows.map((r: any) => ({ id: '', level: r.level, message: r.message, timestamp: new Date(r.ts), source: '' } as DeploymentLog));
   }
-}
- 
 }
